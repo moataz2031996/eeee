@@ -1,114 +1,57 @@
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import json, os
 
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="UTF-8">
-  <title>منصتي التعليمية</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      text-align: center;
-      background-color: #f0f2f5;
-      padding: 50px;
-    }
-    .hidden { display: none; }
-    input, button {
-      padding: 10px;
-      font-size: 16px;
-      margin: 10px;
-    }
-    button {
-      background-color: #4CAF50;
-      color: white;
-      border: none;
-      cursor: pointer;
-    }
-    iframe {
-      margin-top: 30px;
-      border: 2px solid #ddd;
-    }
-    #teacherName {
-      margin-top: 10px;
-      font-size: 18px;
-      color: #333;
-    }
-  </style>
-</head>
-<body>
+app = Flask(__name__)
+CORS(app)
 
-  <!-- صفحة تسجيل الدخول -->
-  <div id="loginPage">
-    <h1>تسجيل الدخول</h1>
-    <input type="text" id="studentName" placeholder="اسم الطالب" />
-    <br>
-    <input type="password" id="studentPass" placeholder="كلمة السر" />
-    <br>
-    <button onclick="login()">تسجيل الدخول</button>
-  </div>
+USERS_FILE = "users.json"
+lessons = {
+    "HS101": {"video": "https://www.youtube.com/embed/dQw4w9WgXcQ", "teacher": "أ. محمد مصطفى"},
+    "HS102": {"video": "https://www.youtube.com/embed/tgbNymZ7vqY", "teacher": "أ. فاطمة علي"},
+    "MATH201": {"video": "https://www.youtube.com/embed/eVTXPUF4Oz4", "teacher": "أ. أحمد سالم"}
+}
 
-  <!-- صفحة إدخال الكود -->
-  <div id="codePage" class="hidden">
-    <h2>مرحبًا، <span id="displayStudentName"></span></h2>
-    <p>أدخل كود الحصة:</p>
-    <input type="text" id="codeInput" placeholder="مثال: HS101" />
-    <button onclick="showLesson()">عرض الحصة</button>
-    <div id="videoContainer"></div>
-    <div id="teacherName"></div>
-  </div>
+def load_users():
+    if not os.path.exists(USERS_FILE):
+        return {}
+    with open(USERS_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
 
-  <script>
-    const password = "12345";  // كلمة السر البسيطة للدخول
+def save_users(users):
+    with open(USERS_FILE, "w", encoding="utf-8") as f:
+        json.dump(users, f, ensure_ascii=False, indent=2)
 
-    const lessons = {
-      "HS101": {
-        video: "https://www.youtube.com/embed/dQw4w9WgXcQ",
-        teacher: "أ. محمد مصطفى"
-      },
-      "HS102": {
-        video: "https://www.youtube.com/embed/tgbNymZ7vqY",
-        teacher: "أ. فاطمة علي"
-      },
-      "MATH201": {
-        video: "https://www.youtube.com/embed/eVTXPUF4Oz4",
-        teacher: "أ. أحمد سالم"
-      }
-    };
+@app.route("/register", methods=["POST"])
+def register():
+    data = request.get_json()
+    name = data.get("name"); password = data.get("password")
+    if not name or not password:
+        return jsonify({"success": False, "message": "يرجى إدخال الاسم وكلمة السر"}), 400
+    users = load_users()
+    if name in users:
+        return jsonify({"success": False, "message": "هذا الاسم مستخدم بالفعل"}), 409
+    users[name] = {"password": password}
+    save_users(users)
+    return jsonify({"success": True, "message": "تم التسجيل بنجاح"})
 
-    function login() {
-      const name = document.getElementById("studentName").value.trim();
-      const pass = document.getElementById("studentPass").value.trim();
-      if (name && pass === password) {
-        localStorage.setItem("studentName", name);
-        document.getElementById("displayStudentName").textContent = name;
-        document.getElementById("loginPage").classList.add("hidden");
-        document.getElementById("codePage").classList.remove("hidden");
-      } else {
-        alert("الرجاء التأكد من الاسم وكلمة السر");
-      }
-    }
+@app.route("/login", methods=["POST"])
+def login():
+    data = request.get_json()
+    users = load_users()
+    user = users.get(data.get("name"))
+    if user and user["password"] == data.get("password"):
+        return jsonify({"success": True, "student": data.get("name")})
+    return jsonify({"success": False, "message": "البيانات غير صحيحة"}), 401
 
-    function showLesson() {
-      const code = document.getElementById("codeInput").value.trim();
-      const lesson = lessons[code];
-      const container = document.getElementById("videoContainer");
-      const teacher = document.getElementById("teacherName");
+@app.route("/lesson/<code>")
+def get_lesson(code):
+    lesson = lessons.get(code)
+    if not lesson:
+        return jsonify({"success": False, "message": "كود غير صحيح"}), 404
+    return jsonify({"success": True, "lesson": lesson})
 
-      if (lesson) {
-        container.innerHTML = `<iframe width="560" height="315" src="${lesson.video}" frameborder="0" allowfullscreen></iframe>`;
-        teacher.textContent = "المعلم: " + lesson.teacher;
-      } else {
-        container.innerHTML = "<p style='color:red;'>كود غير صحيح</p>";
-        teacher.textContent = "";
-      }
-    }
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8000))
+    app.run(host="0.0.0.0", port=port)
 
-    window.onload = function() {
-      const storedName = localStorage.getItem("studentName");
-      if (storedName) {
-        document.getElementById("studentName").value = storedName;
-      }
-    };
-  </script>
-
-</body>
-</html>
